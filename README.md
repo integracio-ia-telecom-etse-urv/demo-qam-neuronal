@@ -4,7 +4,7 @@ Demo interactiva de l'assignatura *Integració de la IA en Telecomunicacions* (U
 
 Una xarxa neuronal (MLP) s'entrena directament al navegador per demodular una constel·lació QAM amb soroll, i es compara amb el detector clàssic de mínima distància.
 
-**Demo en línia:** `https://<organització>.github.io/demo-qam-neuronal/`
+**Demo en línia:** https://integracio-ia-telecom-etse-urv.github.io/demo-qam-neuronal/
 
 ## Què permet fer
 
