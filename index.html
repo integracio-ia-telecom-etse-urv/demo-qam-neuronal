@@ -1,0 +1,685 @@
+<!doctype html>
+<html lang="ca">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Demo interactiva: una xarxa neuronal demodula una constel·lació QAM amb soroll i es compara amb el detector de mínima distància.">
+<title>Demodulador neuronal QAM</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+body{margin:0}img{max-width:100%}[hidden]{display:none!important}
+/* Layout: banc de proves de laboratori — pantalla de constel·lació a l'esquerra, controls i mesures a la dreta, corbes i escenaris a sota */
+:root{
+  --bg:#F2F4F6; --surface:#FFFFFF; --fg:#15202B; --muted:#5A6777; --line:#D8DEE5;
+  --accent:#1D55C4; --accent-ink:#FFFFFF; --classic:#B85A14; --theory:#7B8696; --good:#1F7A4A; --warn:#A5470F;
+  --font-display:'IBM Plex Sans Condensed','Arial Narrow',system-ui,sans-serif;
+  --font-body:'IBM Plex Sans',system-ui,-apple-system,sans-serif;
+  --font-mono:'IBM Plex Mono',ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0D131A; --surface:#141C26; --fg:#E3E9F0; --muted:#94A1B1; --line:#27323F;
+  --accent:#6E9CFF; --accent-ink:#0D131A; --classic:#F09550; --theory:#8A96A6; --good:#5BC88A; --warn:#F09550; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0D131A; --surface:#141C26; --fg:#E3E9F0; --muted:#94A1B1; --line:#27323F;
+  --accent:#6E9CFF; --accent-ink:#0D131A; --classic:#F09550; --theory:#8A96A6; --good:#5BC88A; --warn:#F09550; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--font-body);font-size:15px;line-height:1.5}
+.wrap{max-width:1180px;margin:0 auto;padding-inline:20px;padding-block:24px 48px;display:grid;gap:20px}
+header{display:grid;gap:6px}
+.eyebrow{font-family:var(--font-mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+h1{font-family:var(--font-display);font-weight:600;font-size:clamp(26px,4vw,36px);line-height:1.1;margin:0;text-wrap:balance}
+.lede{margin:0;color:var(--muted);max-width:68ch}
+.main{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:20px;align-items:start}
+@media (max-width:880px){.main{grid-template-columns:minmax(0,1fr)}}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px;min-width:0}
+.scope{position:relative;width:100%;aspect-ratio:1;max-width:100%}
+.scope canvas{position:absolute;inset:0;width:100%;height:100%;border-radius:6px;display:block}
+.scope-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:10px}
+.scope-head h2,.card h2{font-family:var(--font-display);font-weight:600;font-size:18px;margin:0}
+.mono{font-family:var(--font-mono);font-size:13px;color:var(--muted)}
+.toggles{display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:12px;font-size:14px}
+.toggles label{display:flex;gap:6px;align-items:center;cursor:pointer}
+.side{display:grid;gap:20px;min-width:0}
+.ctrl-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 16px;margin-top:12px}
+.ctrl{display:grid;gap:4px;min-width:0}
+.ctrl.full{grid-column:1/-1}
+.ctrl label{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);display:flex;justify-content:space-between;gap:8px}
+.ctrl output{font-family:var(--font-mono);font-size:13px;color:var(--fg);letter-spacing:0;text-transform:none}
+select,input[type=range]{width:100%;font:inherit;font-size:14px}
+select{padding:7px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--fg)}
+input[type=range]{accent-color:var(--accent)}
+input[type=range]:disabled{opacity:.4}
+.group-label{grid-column:1/-1;font-family:var(--font-mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);border-top:1px solid var(--line);padding-top:10px;margin-top:2px}
+.btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}
+button{font:inherit;font-size:14px;font-weight:500;border-radius:6px;padding:8px 14px;cursor:pointer;border:1px solid var(--line);background:var(--bg);color:var(--fg)}
+button.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);min-width:9.5em}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.arch{margin-top:10px}
+.tiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:8px;overflow:hidden;margin-top:12px}
+.tile{background:var(--surface);padding:10px 12px;display:grid;gap:2px;min-width:0}
+.tile .k{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px}
+.tile .v{font-family:var(--font-mono);font-size:20px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.sw{display:inline-block;width:14px;height:3px;border-radius:2px;flex:none}
+.sw.nn{background:var(--accent)} .sw.md{background:var(--classic)} .sw.th{background:var(--theory)}
+.verdict{margin:12px 0 0;padding:10px 12px;border-radius:6px;background:var(--bg);font-size:14px;border-left:3px solid var(--muted)}
+.verdict.win{border-left-color:var(--good)} .verdict.tie{border-left-color:var(--accent)} .verdict.lose{border-left-color:var(--warn)}
+.lower{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:20px;align-items:start}
+@media (max-width:880px){.lower{grid-template-columns:minmax(0,1fr)}}
+.tabs{display:flex;gap:4px;background:var(--bg);padding:3px;border-radius:7px;border:1px solid var(--line)}
+.tabs button{border:0;background:transparent;padding:5px 12px;font-size:13px}
+.tabs button[aria-selected="true"]{background:var(--surface);box-shadow:0 0 0 1px var(--line)}
+.chart-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.chart{position:relative;width:100%;height:280px;margin-top:12px}
+.chart canvas{position:absolute;inset:0;width:100%;height:100%}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:13px;color:var(--muted);margin-top:8px}
+.legend span{display:flex;align-items:center;gap:6px}
+.sw.dash{background:repeating-linear-gradient(90deg,var(--classic) 0 4px,transparent 4px 7px)}
+.sw.dot{background:repeating-linear-gradient(90deg,var(--theory) 0 2px,transparent 2px 5px)}
+.note{font-size:13px;color:var(--muted);margin:8px 0 0}
+.scen{display:grid;gap:10px;margin-top:12px}
+.scen button{text-align:left;display:grid;gap:2px;padding:10px 12px;background:var(--bg)}
+.scen button b{font-weight:600}
+.scen button span{font-size:13px;color:var(--muted);font-weight:400}
+.ex{margin:14px 0 0;padding-left:1.2em;display:grid;gap:6px;font-size:14px}
+.ex li{max-width:65ch}
+.howto{display:grid;gap:22px}
+.howto>h2{font-family:var(--font-display);font-weight:600;font-size:24px;margin:0}
+.how-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:22px 32px}
+@media (max-width:880px){.how-grid{grid-template-columns:minmax(0,1fr)}}
+.how-grid article{min-width:0;display:grid;gap:8px;align-content:start}
+.how-grid h3{font-family:var(--font-display);font-weight:600;font-size:17px;margin:0;text-wrap:balance}
+.how-grid p,.how-grid li{margin:0;max-width:65ch;font-size:14.5px}
+.how-grid ul{margin:0;padding-left:1.2em;display:grid;gap:4px}
+.how-grid .wide{grid-column:1/-1}
+.chain{overflow-x:auto}
+.chain svg{display:block;min-width:620px;width:100%;height:auto}
+.chain text{font-family:var(--font-body);font-size:13px;fill:var(--fg)}
+.chain .sub{font-family:var(--font-mono);font-size:11px;fill:var(--muted)}
+.chain .box{fill:var(--bg);stroke:var(--line)}
+.chain .box.nn{stroke:var(--accent);stroke-width:1.5}
+.chain .box.md{stroke:var(--classic);stroke-width:1.5}
+.chain .ch{fill:var(--bg);stroke:var(--muted);stroke-dasharray:4 3}
+.chain .arr{stroke:var(--muted);stroke-width:1.4;fill:none}
+.chain .head{fill:var(--muted)}
+.bis svg{display:block;width:100%;max-width:280px;height:auto}
+.bis .pt{fill:var(--fg)} .bis .rx{fill:var(--accent)}
+.bis .seg{stroke:var(--muted);stroke-width:1;stroke-dasharray:2 3}
+.bis .med{stroke:var(--classic);stroke-width:1.8;stroke-dasharray:6 4}
+.bis .dist{stroke:var(--accent);stroke-width:1.2}
+.bis text{font-family:var(--font-mono);font-size:11px;fill:var(--muted)}
+.keylist{display:grid;gap:6px;margin:0;padding:0;list-style:none}
+.keylist li{display:grid;grid-template-columns:28px minmax(0,1fr);gap:8px;align-items:baseline}
+.key{font-family:var(--font-mono);font-weight:500;text-align:center}
+.key.cross{color:var(--fg)} .key.dash{color:var(--classic)} .key.fill{display:inline-block;width:18px;height:12px;border-radius:2px;background:linear-gradient(90deg,var(--accent) 50%,var(--classic) 50%);opacity:.35;align-self:center}
+.key.dot{color:var(--accent)} .key.ring{color:var(--fg)}
+.formula{font-family:var(--font-mono);font-size:13.5px;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px 10px;overflow-x:auto;white-space:nowrap}
+.summary{margin:0;padding:12px 14px;border-left:3px solid var(--accent);background:var(--bg);border-radius:0 6px 6px 0;max-width:80ch;font-size:15px}
+.jump{font-size:14px;color:var(--accent);text-decoration:none;font-weight:500;justify-self:start}
+.jump:hover{text-decoration:underline}
+.tip-btn{display:inline-grid;place-items:center;width:17px;height:17px;padding:0;margin-left:6px;border-radius:50%;border:1px solid var(--muted);background:transparent;color:var(--muted);font:600 10.5px/1 var(--font-body);letter-spacing:0;text-transform:none;cursor:help;vertical-align:middle;flex:none}
+.tip-btn:hover,.tip-btn[aria-expanded="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.ctrl label .tip-btn{margin-right:auto}
+#tip{position:fixed;z-index:50;max-width:min(300px,calc(100vw - 24px));background:var(--fg);color:var(--bg);font-size:13px;line-height:1.45;padding:9px 11px;border-radius:7px;box-shadow:0 6px 20px rgba(0,0,0,.18);pointer-events:none;opacity:0;transition:opacity .12s}
+#tip.on{opacity:1}
+#tip b{font-weight:600}
+@media (prefers-reduced-motion: reduce){#tip{transition:none}}
+@media (prefers-reduced-motion: reduce){*{scroll-behavior:auto}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="eyebrow">IA en Telecomunicacions · Demo 1</div>
+    <h1>Demodulador neuronal QAM</h1>
+    <p class="lede">Una xarxa MLP aprèn a decidir quin símbol s'ha transmès a partir de la mostra rebuda (I, Q). Fixa l'SNR i el canal, entrena-la aquí mateix i compara-la amb el detector clàssic de mínima distància.</p>
+    <a class="jump" href="#com-funciona">Com funciona ↓</a>
+  </header>
+
+  <div class="main">
+    <section class="card" aria-label="Constel·lació rebuda">
+      <div class="scope-head">
+        <h2>Regions de decisió apreses</h2>
+        <span class="mono" id="scope-info">16-QAM · Es/N0 = 14 dB</span>
+      </div>
+      <div class="scope" id="scope"><canvas id="cv"></canvas></div>
+      <div class="toggles">
+        <label><input type="checkbox" id="chk-md" checked> Fronteres de mínima distància</label>
+        <label><input type="checkbox" id="chk-pts" checked> Mostres rebudes</label>
+        <label><input type="checkbox" id="chk-err" checked> Ressalta errors de la xarxa</label>
+      </div>
+    </section>
+
+    <div class="side">
+      <section class="card" aria-label="Controls">
+        <h2>Canal i xarxa</h2>
+        <div class="ctrl-grid">
+          <div class="ctrl"><label for="sel-M">Modulació</label>
+            <select id="sel-M"><option value="4">QPSK (4-QAM)</option><option value="16" selected>16-QAM</option><option value="64">64-QAM</option></select></div>
+          <div class="ctrl"><label for="sel-chan">Canal</label>
+            <select id="sel-chan"><option value="awgn">AWGN</option><option value="pa">AWGN + amplificador no lineal</option><option value="phase">AWGN + soroll de fase</option><option value="iq">AWGN + desequilibri IQ</option></select></div>
+          <div class="ctrl full"><label for="rng-snr">Es/N0 <output id="out-snr">14 dB</output></label>
+            <input type="range" id="rng-snr" min="0" max="30" step="0.5" value="14"></div>
+          <div class="ctrl full"><label for="rng-imp">Intensitat de la distorsió <output id="out-imp">—</output></label>
+            <input type="range" id="rng-imp" min="0" max="1" step="0.05" value="0.6" disabled></div>
+          <div class="group-label">Xarxa neuronal</div>
+          <div class="ctrl"><label for="sel-L">Capes ocultes</label>
+            <select id="sel-L"><option value="1">1</option><option value="2" selected>2</option><option value="3">3</option></select></div>
+          <div class="ctrl"><label for="sel-H">Neurones per capa</label>
+            <select id="sel-H"><option>8</option><option>16</option><option selected>32</option><option>64</option></select></div>
+          <div class="ctrl"><label for="sel-act">Activació</label>
+            <select id="sel-act"><option value="relu" selected>ReLU</option><option value="tanh">tanh</option></select></div>
+          <div class="ctrl"><label for="sel-lr">Taxa d'aprenentatge</label>
+            <select id="sel-lr"><option value="0.001">0,001</option><option value="0.003">0,003</option><option value="0.01" selected>0,01</option><option value="0.03">0,03</option></select></div>
+          <div class="ctrl full"><label for="sel-n">Mostres d'entrenament</label>
+            <select id="sel-n"><option value="250">250</option><option value="1000">1 000</option><option value="4000" selected>4 000</option><option value="16000">16 000</option></select></div>
+        </div>
+        <div class="mono arch" id="arch">2 → 32 → 32 → 16 · 1 648 paràmetres</div>
+        <div class="btns">
+          <button class="primary" id="btn-run">Entrena</button>
+          <button id="btn-reset">Reinicia la xarxa</button>
+          <button id="btn-data">Noves mostres</button>
+        </div>
+      </section>
+
+      <section class="card" aria-label="Mesures">
+        <h2>Taxa d'error de símbol (SER)</h2>
+        <div class="tiles">
+          <div class="tile"><span class="k"><i class="sw nn"></i>Xarxa neuronal</span><span class="v" id="t-nn">—</span></div>
+          <div class="tile"><span class="k"><i class="sw md"></i>Mínima distància</span><span class="v" id="t-md">—</span></div>
+          <div class="tile"><span class="k"><i class="sw th"></i>Teòrica AWGN</span><span class="v" id="t-th">—</span></div>
+          <div class="tile"><span class="k">Iteracions · pèrdua</span><span class="v" id="t-it">0</span></div>
+        </div>
+        <p class="verdict" id="verdict">Prem «Entrena» per començar. La xarxa parteix de pesos aleatoris.</p>
+      </section>
+    </div>
+  </div>
+
+  <div class="lower">
+    <section class="card" aria-label="Corbes">
+      <div class="chart-head">
+        <h2 id="chart-h"><span id="chart-title">Evolució de l'error durant l'entrenament</span></h2>
+        <div class="tabs" role="tablist">
+          <button role="tab" id="tab-learn" aria-selected="true">Aprenentatge</button>
+          <button role="tab" id="tab-sweep" aria-selected="false">SER vs SNR</button>
+        </div>
+      </div>
+      <div class="chart"><canvas id="ch"></canvas></div>
+      <div class="legend">
+        <span><i class="sw nn"></i>Xarxa neuronal</span>
+        <span><i class="sw dash"></i>Mínima distància</span>
+        <span><i class="sw dot"></i>Teòrica AWGN</span>
+      </div>
+      <p class="note" id="chart-note">SER mesurada sobre 10 000 mostres de prova noves, independents de les d'entrenament.</p>
+    </section>
+
+    <section class="card" aria-label="Escenaris">
+      <h2>Escenaris per a classe</h2>
+      <div class="scen">
+        <button data-scen="awgn"><b>1 · Soroll gaussià pur</b><span>16-QAM a 12 dB. La xarxa només pot igualar el detector clàssic.</span></button>
+        <button data-scen="pa"><b>2 · Amplificador saturat</b><span>16-QAM a 22 dB amb compressió AM/AM i AM/PM. Aquí la xarxa guanya.</span></button>
+        <button data-scen="phase"><b>3 · Soroll de fase</b><span>64-QAM a 26 dB. Les regions es corben com arcs.</span></button>
+        <button data-scen="few"><b>4 · Poques dades</b><span>64-QAM amb 250 mostres i una xarxa gran. Sobreajustament.</span></button>
+      </div>
+      <ol class="ex">
+        <li>Amb AWGN, per què la xarxa no pot superar la mínima distància? Relaciona-ho amb el detector de màxima versemblança.</li>
+        <li>A l'escenari 2, on apareixen els errors del detector clàssic? Quins símbols comprimeix més l'amplificador?</li>
+        <li>Entrena a 10 dB i mira la corba SER vs SNR. Què passa quan avalues la xarxa a SNR molt més altes?</li>
+      </ol>
+    </section>
+  </div>
+
+  <section class="card howto" id="com-funciona" aria-labelledby="h-how">
+    <h2 id="h-how">Com funciona</h2>
+
+    <div class="chain" aria-label="Cadena de comunicació: bits, mapejador QAM, canal, detectors i símbol decidit">
+      <svg viewBox="0 0 760 130" role="img">
+        <title>Cadena de comunicació simulada a la demo</title>
+        <rect class="box" x="4" y="45" width="84" height="40" rx="6"/><text x="46" y="63" text-anchor="middle">Bits</text><text class="sub" x="46" y="78" text-anchor="middle">1011</text>
+        <rect class="box" x="116" y="45" width="124" height="40" rx="6"/><text x="178" y="63" text-anchor="middle">Mapejador QAM</text><text class="sub" x="178" y="78" text-anchor="middle">bits → símbol s</text>
+        <rect class="ch" x="268" y="40" width="140" height="50" rx="6"/><text x="338" y="61" text-anchor="middle">Canal</text><text class="sub" x="338" y="78" text-anchor="middle">distorsió + soroll</text>
+        <rect class="box md" x="486" y="12" width="156" height="42" rx="6"/><text x="564" y="31" text-anchor="middle">Mínima distància</text><text class="sub" x="564" y="46" text-anchor="middle">llindars fixos</text>
+        <rect class="box nn" x="486" y="76" width="156" height="42" rx="6"/><text x="564" y="95" text-anchor="middle">Xarxa neuronal</text><text class="sub" x="564" y="110" text-anchor="middle">regions apreses</text>
+        <rect class="box" x="670" y="45" width="86" height="40" rx="6"/><text x="713" y="63" text-anchor="middle">Símbol</text><text class="sub" x="713" y="78" text-anchor="middle">decidit ŝ</text>
+        <path class="arr" d="M88 65H110M240 65H262M408 65H456M456 65V33H480M456 65V97H480M642 33H656V65H664M642 97H656V65"/>
+        <path class="head" d="M110 61l6 4-6 4zM262 61l6 4-6 4zM480 29l6 4-6 4zM480 93l6 4-6 4zM664 61l6 4-6 4z"/>
+        <text class="sub" x="431" y="57" text-anchor="middle">r=(I,Q)</text>
+      </svg>
+    </div>
+
+    <div class="how-grid">
+      <article>
+        <h3>El problema</h3>
+        <p>En QAM, el transmissor agrupa els bits en blocs (4 bits en 16-QAM) i cada bloc tria un <b>símbol</b>: un punt del pla I/Q, amb una amplitud en fase (I) i una en quadratura (Q).</p>
+        <p>El canal altera aquest punt. El <b>soroll tèrmic (AWGN)</b> el desplaça una mica en una direcció aleatòria. Les <b>distorsions</b> (un amplificador que satura, el soroll de fase de l'oscil·lador, un desequilibri IQ) el deformen de manera sistemàtica.</p>
+        <p>El receptor ha de decidir quin símbol es va enviar a partir del punt rebut. Cada decisió errònia és un error de símbol, i el percentatge d'errors és la <b>SER</b> (Symbol Error Rate).</p>
+      </article>
+
+      <article>
+        <h3>Com llegir la pantalla</h3>
+        <ul class="keylist">
+          <li><span class="key cross">+</span><span>Símbols ideals de la constel·lació, sense soroll.</span></li>
+          <li><span class="key dot">●</span><span>Mostres rebudes. El color indica quin símbol es va enviar de veritat.</span></li>
+          <li><span class="key fill" aria-hidden="true"></span><span>Fons: regió de decisió de la xarxa. Es pinta cada píxel amb el color del símbol que triaria.</span></li>
+          <li><span class="key dash">┆</span><span>Ratlles taronges: fronteres del detector de mínima distància.</span></li>
+          <li><span class="key ring">○</span><span>Mostres que la xarxa classifica malament. Solen ser a prop de les fronteres.</span></li>
+        </ul>
+      </article>
+
+      <article>
+        <h3>Les ratlles de mínima distància</h3>
+        <p>És el detector clàssic: <b>s'escull el símbol ideal més proper al punt rebut</b>, en distància euclidiana.</p>
+        <p>La frontera entre dos símbols veïns és la <b>mediatriu</b> del segment que els uneix: la ratlla que queda just a mig camí entre tots dos. En una QAM quadrada, les mediatrius formen una quadrícula de ratlles verticals i horitzontals.</p>
+        <p>En 16-QAM, els nivells de cada eix són −3, −1, +1 i +3, dividits per √10 perquè l'energia mitjana del símbol valgui 1. Les fronteres queden a 0 i a ±2/√10 ≈ ±0,63. El detector només compara I i Q amb aquests llindars.</p>
+      </article>
+
+      <article class="bis" aria-label="Exemple de decisió per mínima distància">
+        <svg viewBox="0 0 280 175" role="img">
+          <title>La mediatriu separa els punts més propers a s₁ dels més propers a s₂</title>
+          <line class="med" x1="85" y1="-25" x2="175" y2="185"/>
+          <line class="seg" x1="60" y1="110" x2="200" y2="50"/>
+          <line class="dist" x1="165" y1="95" x2="60" y2="110" opacity=".45"/>
+          <line class="dist" x1="165" y1="95" x2="200" y2="50"/>
+          <circle class="pt" cx="60" cy="110" r="5"/><circle class="pt" cx="200" cy="50" r="5"/>
+          <circle class="rx" cx="165" cy="95" r="4.5"/>
+          <text x="40" y="130">s₁</text><text x="210" y="46">s₂</text><text x="172" y="112">r</text>
+          <text x="110" y="12">mediatriu</text>
+          <text x="4" y="168">d(r,s₂) &lt; d(r,s₁) → ŝ = s₂</text>
+        </svg>
+        <p>Si el punt rebut <b>r</b> cau al costat de s₂ de la mediatriu, el detector decideix s₂. Aplicant aquesta regla a tots els parells de símbols veïns s'obtenen les regions de decisió.</p>
+      </article>
+
+      <article>
+        <h3>Per què és òptim amb soroll gaussià</h3>
+        <p>Amb AWGN, la probabilitat de rebre r quan s'ha enviat s decreix com una gaussiana de la distància entre tots dos:</p>
+        <div class="formula">p(r | s) ∝ exp( −‖r − s‖² / N₀ )</div>
+        <p>Si els símbols són igual de probables, el símbol més proper és també el més probable. Per tant, la mínima distància és el <b>detector de màxima versemblança (ML)</b>, el millor possible en aquest cas. Cap mètode, tampoc una xarxa neuronal, el pot superar.</p>
+      </article>
+
+      <article>
+        <h3>Quan falla</h3>
+        <p>La mínima distància suposa que les mostres rebudes queden centrades a les creus ideals. Si el canal les desplaça sistemàticament, aquesta suposició ja no és certa.</p>
+        <p>Per exemple, un amplificador saturat comprimeix els símbols exteriors cap al centre i els fa girar una mica. El núvol d'un símbol pot caure a l'altre costat d'una ratlla taronja i es comet un error encara que el soroll sigui baix. Les ratlles són fixes: no s'adapten al canal real.</p>
+      </article>
+
+      <article>
+        <h3>Què fa la xarxa neuronal</h3>
+        <p>Resol el mateix problema com una <b>classificació</b>:</p>
+        <ul>
+          <li><b>Entrada:</b> 2 números, (I, Q) del punt rebut.</li>
+          <li><b>Sortida:</b> M números, un per símbol. La funció softmax els converteix en probabilitats i es tria el més alt.</li>
+          <li><b>Entrenament:</b> parelles (punt rebut, símbol enviat) amb pèrdua d'entropia creuada i optimitzador Adam. En un sistema real, aquestes parelles serien les <b>seqüències pilot</b> que el transmissor envia periòdicament.</li>
+        </ul>
+        <p>Ningú no li dibuixa les fronteres: les aprèn a partir de les dades.</p>
+      </article>
+
+      <article>
+        <h3>Què cal observar</h3>
+        <ul>
+          <li><b>Amb AWGN</b>, les regions de colors acaben coincidint amb les ratlles taronges. La xarxa redescobreix el detector òptim, però no el supera.</li>
+          <li><b>Amb distorsió</b>, les regions es corben, giren o s'encongeixen per seguir els núvols reals. La SER de la xarxa baixa molt per sota de la del detector clàssic.</li>
+          <li>La corba <b>SER vs SNR</b> mostra com es comporta la xarxa amb un soroll diferent del d'entrenament: generalització.</li>
+          <li>L'escenari <b>Poques dades</b> mostra el sobreajustament: regions estranyes que memoritzen el soroll i fallen amb mostres noves.</li>
+        </ul>
+      </article>
+
+      <p class="summary wide">En resum, la mínima distància és la solució analítica, òptima quan el model del canal és correcte. La xarxa és la solució basada en dades: iguala la clàssica quan el model és correcte i la supera quan no ho és.</p>
+    </div>
+  </section>
+</div>
+
+<script>
+(function(){
+const $=id=>document.getElementById(id);
+const S={M:16,snr:14,chan:'awgn',imp:0.6,H:32,L:2,act:'relu',lr:0.01,nTrain:4000,running:false,iter:0,loss:NaN};
+const NTEST=10000, BATCH=64, STEPS_PER_FRAME=10, SHOW_PTS=1500;
+let m,norm,levels,consts,peak,E;
+let train=null,test=null,mdSER=0,net=null,hist=[],sweep=null,tab='learn';
+let regionImg=null,regionDirty=true,ptsPred=null,colors=null,theme={};
+
+function randn(){let u=0;while(!u)u=Math.random();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*Math.random());}
+function buildConst(){
+  m=Math.round(Math.sqrt(S.M));norm=Math.sqrt(2*(S.M-1)/3);levels=[];
+  for(let k=0;k<m;k++)levels.push((2*k-(m-1))/norm);
+  consts=[];for(let i=0;i<S.M;i++)consts.push([levels[i%m],levels[Math.floor(i/m)]]);
+  peak=levels[m-1];E=peak*1.62;
+}
+// ---- Canal ----
+function applyChannel(x,y){
+  const a=S.imp;
+  if(S.chan==='phase'){
+    const th=randn()*a*6*Math.PI/180;const c=Math.cos(th),s=Math.sin(th);return [x*c-y*s,x*s+y*c];
+  }else if(S.chan==='pa'){
+    const r=Math.hypot(x,y);if(r===0)return[0,0];
+    const peakR=peak*Math.SQRT2;const g=(0.2+0.65*a)/peakR;const u=r*g;
+    const A=(2*u/(1+u*u))/(2*g);                   // Saleh AM/AM, guany de petit senyal = 1
+    const ph=Math.atan2(y,x)+(Math.PI/7)*u*u/(1+u*u); // Saleh AM/PM
+    return [A*Math.cos(ph),A*Math.sin(ph)];
+  }else if(S.chan==='iq'){
+    const eps=0.28*a,phi=a*28*Math.PI/180;
+    return [(1+eps)*x,(1-eps)*(y*Math.cos(phi)+x*Math.sin(phi))];
+  }
+  return [x,y];
+}
+function gen(n,snrDb){
+  const sig=Math.sqrt(0.5/Math.pow(10,snrDb/10));
+  const X=new Float32Array(2*n),Y=new Uint8Array(n);
+  for(let k=0;k<n;k++){const c=(Math.random()*S.M)|0;const p=applyChannel(consts[c][0],consts[c][1]);
+    X[2*k]=p[0]+sig*randn();X[2*k+1]=p[1]+sig*randn();Y[k]=c;}
+  return {X,Y};
+}
+function mdDetect(x,y){
+  let ci=Math.round((x*norm+(m-1))/2),ri=Math.round((y*norm+(m-1))/2);
+  ci=ci<0?0:ci>m-1?m-1:ci;ri=ri<0?0:ri>m-1?m-1:ri;return ri*m+ci;
+}
+function serOf(fn,D){let e=0;const n=D.Y.length;for(let k=0;k<n;k++)if(fn(D.X[2*k],D.X[2*k+1])!==D.Y[k])e++;return e/n;}
+function erfc(x){const z=Math.abs(x),t=1/(1+0.5*z);
+  const r=t*Math.exp(-z*z-1.26551223+t*(1.00002368+t*(0.37409196+t*(0.09678418+t*(-0.18628806+t*(0.27886807+t*(-1.13520398+t*(1.48851587+t*(-0.82215223+t*0.17087277)))))))));
+  return x>=0?r:2-r;}
+function Qf(x){return 0.5*erfc(x/Math.SQRT2);}
+function serTheory(snrDb){const g=Math.pow(10,snrDb/10);const p=2*(1-1/m)*Qf(Math.sqrt(3*g/(S.M-1)));return 1-(1-p)*(1-p);}
+
+// ---- MLP amb Adam ----
+class MLP{
+  constructor(sizes,act){
+    this.sizes=sizes;this.act=act;this.L=sizes.length-1;this.t=0;
+    this.W=[];this.b=[];this.gW=[];this.gb=[];this.mW=[];this.vW=[];this.mb=[];this.vb=[];this.a=[];this.z=[];this.d=[];
+    for(let l=0;l<this.L;l++){const ni=sizes[l],no=sizes[l+1];const W=new Float32Array(ni*no);const sd=Math.sqrt((act==='relu'?2:1)/ni);
+      for(let k=0;k<W.length;k++)W[k]=randn()*sd;
+      this.W.push(W);this.b.push(new Float32Array(no));
+      for(const arr of [this.gW,this.mW,this.vW])arr.push(new Float32Array(ni*no));
+      for(const arr of [this.gb,this.mb,this.vb])arr.push(new Float32Array(no));}
+    for(let l=0;l<=this.L;l++){this.a.push(new Float32Array(sizes[l]));this.z.push(new Float32Array(sizes[l]));this.d.push(new Float32Array(sizes[l]));}
+    this.p=new Float32Array(sizes[this.L]);
+    this.nParams=this.W.reduce((s,w)=>s+w.length,0)+this.b.reduce((s,w)=>s+w.length,0);
+  }
+  fwd(x0,x1){
+    const a=this.a,z=this.z,relu=this.act==='relu';a[0][0]=x0;a[0][1]=x1;
+    for(let l=0;l<this.L;l++){const ni=this.sizes[l],no=this.sizes[l+1],W=this.W[l],b=this.b[l],ai=a[l],zo=z[l+1],ao=a[l+1],last=l===this.L-1;
+      for(let j=0;j<no;j++){let s=b[j];const o=j*ni;for(let i=0;i<ni;i++)s+=W[o+i]*ai[i];zo[j]=s;ao[j]=last?s:(relu?(s>0?s:0):Math.tanh(s));}}
+    return a[this.L];
+  }
+  predict(x0,x1){const o=this.fwd(x0,x1);let bi=0,bv=o[0];for(let j=1;j<o.length;j++)if(o[j]>bv){bv=o[j];bi=j;}return bi;}
+  step(X,Y,bs,lr){
+    const L=this.L,relu=this.act==='relu';
+    for(let l=0;l<L;l++){this.gW[l].fill(0);this.gb[l].fill(0);}
+    let loss=0;const n=Y.length,p=this.p;
+    for(let s=0;s<bs;s++){
+      const k=(Math.random()*n)|0,y=Y[k];const o=this.fwd(X[2*k],X[2*k+1]);
+      let mx=o[0];for(let j=1;j<o.length;j++)if(o[j]>mx)mx=o[j];
+      let sum=0;for(let j=0;j<o.length;j++){p[j]=Math.exp(o[j]-mx);sum+=p[j];}
+      const dL=this.d[L];for(let j=0;j<o.length;j++){p[j]/=sum;dL[j]=p[j]-(j===y?1:0);}
+      loss-=Math.log(p[y]+1e-12);
+      for(let l=L-1;l>=0;l--){
+        const ni=this.sizes[l],no=this.sizes[l+1],W=this.W[l],dl=this.d[l+1],ai=this.a[l],gW=this.gW[l],gb=this.gb[l];
+        for(let j=0;j<no;j++){const dj=dl[j];gb[j]+=dj;const oo=j*ni;for(let i=0;i<ni;i++)gW[oo+i]+=dj*ai[i];}
+        if(l>0){const dp=this.d[l],zp=this.z[l];
+          for(let i=0;i<ni;i++){let sacc=0;for(let j=0;j<no;j++)sacc+=W[j*ni+i]*dl[j];
+            dp[i]=sacc*(relu?(zp[i]>0?1:0):(1-ai[i]*ai[i]));}}
+      }
+    }
+    this.t++;const b1=0.9,b2=0.999,lrt=lr*Math.sqrt(1-Math.pow(b2,this.t))/(1-Math.pow(b1,this.t)),inv=1/bs;
+    const upd=(w,g,mm,vv)=>{for(let k=0;k<w.length;k++){const gg=g[k]*inv;mm[k]=b1*mm[k]+(1-b1)*gg;vv[k]=b2*vv[k]+(1-b2)*gg*gg;w[k]-=lrt*mm[k]/(Math.sqrt(vv[k])+1e-8);}};
+    for(let l=0;l<L;l++){upd(this.W[l],this.gW[l],this.mW[l],this.vW[l]);upd(this.b[l],this.gb[l],this.mb[l],this.vb[l]);}
+    return loss/bs;
+  }
+}
+
+// ---- Tema i colors ----
+function hsl2rgb(h,s,l){s/=100;l/=100;const k=n=>(n+h/30)%12,a=s*Math.min(l,1-l),f=n=>l-a*Math.max(-1,Math.min(k(n)-3,Math.min(9-k(n),1)));return [Math.round(255*f(0)),Math.round(255*f(8)),Math.round(255*f(4))];}
+function hex2rgb(h){h=h.trim().replace('#','');if(h.length===3)h=h.split('').map(c=>c+c).join('');const n=parseInt(h,16);return [(n>>16)&255,(n>>8)&255,n&255];}
+function readTheme(){
+  const cs=getComputedStyle(document.documentElement);
+  ['--bg','--surface','--fg','--muted','--line','--accent','--classic','--theory'].forEach(k=>theme[k]=cs.getPropertyValue(k).trim());
+  theme.dark=hex2rgb(theme['--surface']).reduce((a,b)=>a+b,0)<300;
+  const bg=hex2rgb(theme['--surface']);colors=[];
+  for(let i=0;i<S.M;i++){
+    const h=(i*137.508+(Math.floor(i/m)%2)*40)%360;
+    const pt=hsl2rgb(h,theme.dark?70:62,theme.dark?66:44);
+    const mix=theme.dark?0.30:0.22;
+    const reg=pt.map((c,j)=>Math.round(c*mix+bg[j]*(1-mix)));
+    colors.push({pt:`rgb(${pt})`,reg});
+  }
+  regionDirty=true;
+}
+
+// ---- Dibuix de la constel·lació ----
+const cv=$('cv'),ctx=cv.getContext('2d');const off=document.createElement('canvas');const RES=128;off.width=off.height=RES;const octx=off.getContext('2d');
+function sizeCanvas(c){const r=c.getBoundingClientRect(),d=window.devicePixelRatio||1;const w=Math.max(1,Math.round(r.width*d)),h=Math.max(1,Math.round(r.height*d));if(c.width!==w||c.height!==h){c.width=w;c.height=h;}return {w:r.width,h:r.height,d};}
+function renderRegions(){
+  if(!net)return;const img=octx.createImageData(RES,RES),D=img.data;
+  for(let py=0;py<RES;py++){const y=E-(py+0.5)/RES*2*E;
+    for(let px=0;px<RES;px++){const x=-E+(px+0.5)/RES*2*E;const c=net.predict(x,y),rgb=colors[c].reg,o=4*(py*RES+px);D[o]=rgb[0];D[o+1]=rgb[1];D[o+2]=rgb[2];D[o+3]=255;}}
+  octx.putImageData(img,0,0);
+  const n=Math.min(SHOW_PTS,train.Y.length);ptsPred=new Uint8Array(n);
+  for(let k=0;k<n;k++)ptsPred[k]=net.predict(train.X[2*k],train.X[2*k+1]);
+  regionDirty=false;
+}
+function drawScope(){
+  const {w,h,d}=sizeCanvas(cv);ctx.setTransform(d,0,0,d,0,0);
+  const X=v=>(v+E)/(2*E)*w,Y=v=>(E-v)/(2*E)*h;
+  ctx.fillStyle=theme['--surface'];ctx.fillRect(0,0,w,h);
+  if(regionDirty)renderRegions();
+  ctx.imageSmoothingEnabled=true;ctx.drawImage(off,0,0,w,h);
+  // eixos
+  ctx.strokeStyle=theme['--muted'];ctx.globalAlpha=.45;ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(X(0),0);ctx.lineTo(X(0),h);ctx.moveTo(0,Y(0));ctx.lineTo(w,Y(0));ctx.stroke();ctx.globalAlpha=1;
+  ctx.fillStyle=theme['--muted'];ctx.font='12px "IBM Plex Mono",monospace';ctx.fillText('I',w-14,Y(0)-6);ctx.fillText('Q',X(0)+6,14);
+  // fronteres mínima distància
+  if($('chk-md').checked){ctx.strokeStyle=theme['--classic'];ctx.lineWidth=1.25;ctx.setLineDash([5,4]);ctx.beginPath();
+    for(let k=0;k<m-1;k++){const t=(levels[k]+levels[k+1])/2;ctx.moveTo(X(t),0);ctx.lineTo(X(t),h);ctx.moveTo(0,Y(t));ctx.lineTo(w,Y(t));}
+    ctx.stroke();ctx.setLineDash([]);}
+  // mostres
+  if($('chk-pts').checked&&train){const n=Math.min(SHOW_PTS,train.Y.length),r=S.M===64?1.6:2.1;
+    for(let k=0;k<n;k++){ctx.fillStyle=colors[train.Y[k]].pt;ctx.globalAlpha=.85;ctx.beginPath();ctx.arc(X(train.X[2*k]),Y(train.X[2*k+1]),r,0,6.2832);ctx.fill();}
+    ctx.globalAlpha=1;
+    if($('chk-err').checked&&ptsPred){ctx.strokeStyle=theme['--fg'];ctx.lineWidth=1.2;ctx.beginPath();
+      for(let k=0;k<n;k++)if(ptsPred[k]!==train.Y[k]){const px=X(train.X[2*k]),py=Y(train.X[2*k+1]);ctx.moveTo(px+r+2.2,py);ctx.arc(px,py,r+2.2,0,6.2832);}ctx.stroke();}
+  }
+  // constel·lació ideal
+  ctx.strokeStyle=theme['--fg'];ctx.lineWidth=1.6;const s=S.M===64?3.5:5;ctx.beginPath();
+  for(const c of consts){const px=X(c[0]),py=Y(c[1]);ctx.moveTo(px-s,py);ctx.lineTo(px+s,py);ctx.moveTo(px,py-s);ctx.lineTo(px,py+s);}ctx.stroke();
+}
+
+// ---- Gràfics log ----
+const ch=$('ch'),cctx=ch.getContext('2d');
+const SUP={'-':'⁻','0':'⁰','1':'¹','2':'²','3':'³','4':'⁴','5':'⁵','6':'⁶','7':'⁷','8':'⁸','9':'⁹'};
+const sup=n=>String(n).split('').map(c=>SUP[c]).join('');
+function niceStep(range,target){const raw=range/target,p=Math.pow(10,Math.floor(Math.log10(raw))),f=raw/p;return (f<1.5?1:f<3.5?2:f<7.5?5:10)*p;}
+function drawChart(){
+  const {w,h,d}=sizeCanvas(ch);cctx.setTransform(d,0,0,d,0,0);cctx.clearRect(0,0,w,h);
+  const padL=46,padR=12,padT=10,padB=34,pw=w-padL-padR,ph=h-padT-padB;
+  const YMIN=-4,floor=Math.pow(10,YMIN);
+  let xmin,xmax,series,xlabel,vline=null;
+  if(tab==='learn'){
+    xmin=0;xmax=Math.max(200,hist.length?hist[hist.length-1].it:0);xlabel='iteracions (lots de 64 mostres)';
+    series=[{k:'th',c:theme['--theory'],dash:[2,3],pts:hist.map(e=>[e.it,e.th])},{k:'md',c:theme['--classic'],dash:[6,4],pts:hist.map(e=>[e.it,e.md])},{k:'nn',c:theme['--accent'],dash:[],pts:hist.map(e=>[e.it,e.nn])}];
+  }else{
+    xmin=0;xmax=30;xlabel='Es/N0 (dB)';vline=S.snr;
+    const sw=sweep||[];
+    series=[{c:theme['--theory'],dash:[2,3],pts:sw.map(e=>[e.snr,e.th])},{c:theme['--classic'],dash:[6,4],pts:sw.map(e=>[e.snr,e.md])},{c:theme['--accent'],dash:[],pts:sw.map(e=>[e.snr,e.nn]),dots:true}];
+  }
+  const X=v=>padL+(v-xmin)/(xmax-xmin)*pw,Y=v=>{const l=Math.log10(Math.max(v,floor));return padT+(0-l)/(0-YMIN)*ph;};
+  cctx.font='11px "IBM Plex Mono",monospace';cctx.lineWidth=1;
+  for(let e=0;e>=YMIN;e--){const y=Y(Math.pow(10,e));cctx.strokeStyle=theme['--line'];cctx.beginPath();cctx.moveTo(padL,y);cctx.lineTo(w-padR,y);cctx.stroke();
+    cctx.fillStyle=theme['--muted'];cctx.textAlign='right';cctx.textBaseline='middle';cctx.fillText(e===0?'1':'10'+sup(e),padL-6,y);}
+  const st=niceStep(xmax-xmin,6);cctx.textAlign='center';cctx.textBaseline='top';
+  for(let v=Math.ceil(xmin/st)*st;v<=xmax+1e-9;v+=st){const x=X(v);cctx.strokeStyle=theme['--line'];cctx.beginPath();cctx.moveTo(x,padT);cctx.lineTo(x,padT+ph);cctx.stroke();
+    cctx.fillStyle=theme['--muted'];cctx.fillText(v>=1000?(v/1000)+'k':String(Math.round(v*10)/10),x,padT+ph+6);}
+  cctx.fillText(xlabel,padL+pw/2,padT+ph+20);
+  if(vline!==null){cctx.strokeStyle=theme['--fg'];cctx.globalAlpha=.35;cctx.setLineDash([3,3]);cctx.beginPath();cctx.moveTo(X(vline),padT);cctx.lineTo(X(vline),padT+ph);cctx.stroke();cctx.setLineDash([]);cctx.globalAlpha=1;
+    cctx.fillStyle=theme['--muted'];cctx.textAlign='left';cctx.textBaseline='top';cctx.fillText('entrenada aquí',Math.min(X(vline)+5,w-padR-92),padT+4);}
+  cctx.save();cctx.beginPath();cctx.rect(padL,padT,pw,ph);cctx.clip();
+  for(const s of series){if(!s.pts.length)continue;cctx.strokeStyle=s.c;cctx.lineWidth=s.dash.length?1.5:2.2;cctx.setLineDash(s.dash);cctx.beginPath();
+    s.pts.forEach((p,i)=>{const x=X(p[0]),y=Y(p[1]);i?cctx.lineTo(x,y):cctx.moveTo(x,y);});cctx.stroke();cctx.setLineDash([]);
+    if(s.dots){cctx.fillStyle=s.c;for(const p of s.pts){cctx.beginPath();cctx.arc(X(p[0]),Y(p[1]),2.6,0,6.2832);cctx.fill();}}
+    if(!s.dots&&tab==='learn'){const p=s.pts[s.pts.length-1];cctx.fillStyle=s.c;cctx.beginPath();cctx.arc(X(p[0]),Y(p[1]),3,0,6.2832);cctx.fill();}}
+  cctx.restore();
+  if(tab==='sweep'&&!sweep){cctx.fillStyle=theme['--muted'];cctx.textAlign='center';cctx.textBaseline='middle';cctx.font='13px "IBM Plex Sans",sans-serif';cctx.fillText('Calculant…',padL+pw/2,padT+ph/2);}
+}
+
+// ---- Format ----
+function fmtSER(v,n){
+  if(v===0)return '< 10'+sup(-Math.round(Math.log10(n)));
+  if(v>=0.1)return v.toFixed(3).replace('.',',');
+  const e=Math.floor(Math.log10(v)),mm=v/Math.pow(10,e);return mm.toFixed(1).replace('.',',')+'·10'+sup(e);
+}
+function fmtInt(n){return n.toLocaleString('ca-ES').replace(/\./g,' ');}
+
+// ---- Estat ----
+function newData(){train=gen(S.nTrain,S.snr);test=gen(NTEST,S.snr);mdSER=serOf(mdDetect,test);regionDirty=true;sweep=null;}
+function newNet(){
+  const sizes=[2];for(let l=0;l<S.L;l++)sizes.push(S.H);sizes.push(S.M);
+  net=new MLP(sizes,S.act);S.iter=0;S.loss=NaN;hist=[];sweep=null;regionDirty=true;
+  $('arch').textContent=sizes.join(' → ')+' · '+fmtInt(net.nParams)+' paràmetres';
+}
+function evaluateNow(){
+  const nn=serOf((x,y)=>net.predict(x,y),test),th=serTheory(S.snr);
+  hist.push({it:S.iter,nn,md:mdSER,th});
+  if(hist.length>500){hist=hist.filter((_,i)=>i%2===0||i===hist.length-1);}
+  $('t-nn').textContent=fmtSER(nn,NTEST);$('t-md').textContent=fmtSER(mdSER,NTEST);$('t-th').textContent=fmtSER(th,1e6);
+  $('t-it').textContent=fmtInt(S.iter)+(isNaN(S.loss)?'':' · '+S.loss.toFixed(2).replace('.',','));
+  const v=$('verdict');
+  if(S.iter===0){v.className='verdict';v.textContent='Prem «Entrena» per començar. La xarxa parteix de pesos aleatoris.';}
+  else if(mdSER<5/NTEST&&nn<5/NTEST){v.className='verdict tie';v.textContent='Tots dos detectors pràcticament no s\'equivoquen a aquesta SNR. Baixa l\'SNR per veure diferències.';}
+  else if(nn<mdSER*0.8){v.className='verdict win';v.textContent='La xarxa comet '+(mdSER/Math.max(nn,1/NTEST)).toFixed(1).replace('.',',')+' vegades menys errors que la mínima distància: ha après la distorsió del canal, que el detector clàssic ignora.';}
+  else if(nn<=mdSER*1.2){v.className='verdict tie';v.textContent=S.chan==='awgn'?'Rendiment equivalent. Amb soroll gaussià i símbols equiprobables, la mínima distància ja és el detector òptim (ML): la xarxa només el pot igualar.':'Rendiment equivalent. Prova d\'augmentar la intensitat de la distorsió.';}
+  else{v.className='verdict lose';v.textContent='La xarxa encara no arriba al detector clàssic. Deixa-la entrenar més, dona-li més mostres o més neurones.';}
+  if(tab==='learn')drawChart();
+}
+function runSweep(){
+  sweep=null;drawChart();
+  setTimeout(()=>{
+    const out=[];const saved=S.snr;
+    for(let s=0;s<=30;s+=2){const D=gen(8000,s);out.push({snr:s,nn:serOf((x,y)=>net.predict(x,y),D),md:serOf(mdDetect,D),th:serTheory(s)});}
+    S.snr=saved;sweep=out;drawChart();
+  },30);
+}
+function updateLabels(){
+  $('out-snr').textContent=S.snr.toString().replace('.',',')+' dB';
+  $('rng-imp').disabled=S.chan==='awgn';$('out-imp').textContent=S.chan==='awgn'?'—':Math.round(S.imp*100)+' %';
+  const nm={4:'QPSK',16:'16-QAM',64:'64-QAM'}[S.M],cn={awgn:'AWGN',pa:'amplificador no lineal',phase:'soroll de fase',iq:'desequilibri IQ'}[S.chan];
+  $('scope-info').textContent=nm+' · '+S.snr.toString().replace('.',',')+' dB · '+cn;
+}
+function setRunning(r){S.running=r;$('btn-run').textContent=r?'Atura':(S.iter?'Continua':'Entrena');}
+
+// ---- Bucle ----
+let frame=0;
+function loop(){
+  if(S.running){let l=0;for(let i=0;i<STEPS_PER_FRAME;i++)l+=net.step(train.X,train.Y,BATCH,S.lr);l/=STEPS_PER_FRAME;
+    S.loss=isNaN(S.loss)?l:0.9*S.loss+0.1*l;S.iter+=STEPS_PER_FRAME;frame++;
+    if(frame%6===0){regionDirty=true;drawScope();}
+    if(frame%10===0)evaluateNow();}
+  requestAnimationFrame(loop);
+}
+
+// ---- Events ----
+function onChannelChange(){newData();updateLabels();evaluateNow();drawScope();if(tab==='sweep')runSweep();}
+function onNetChange(){const was=S.running;newNet();evaluateNow();drawScope();setRunning(was);if(tab==='sweep')runSweep();}
+$('rng-snr').addEventListener('input',e=>{S.snr=+e.target.value;onChannelChange();});
+$('rng-imp').addEventListener('input',e=>{S.imp=+e.target.value;onChannelChange();});
+$('sel-chan').addEventListener('change',e=>{S.chan=e.target.value;onChannelChange();});
+$('sel-M').addEventListener('change',e=>{S.M=+e.target.value;buildConst();readTheme();newData();updateLabels();onNetChange();});
+$('sel-n').addEventListener('change',e=>{S.nTrain=+e.target.value;onChannelChange();});
+$('sel-H').addEventListener('change',e=>{S.H=+e.target.value;onNetChange();});
+$('sel-L').addEventListener('change',e=>{S.L=+e.target.value;onNetChange();});
+$('sel-act').addEventListener('change',e=>{S.act=e.target.value;onNetChange();});
+$('sel-lr').addEventListener('change',e=>{S.lr=+e.target.value;});
+$('btn-run').addEventListener('click',()=>setRunning(!S.running));
+$('btn-reset').addEventListener('click',()=>{newNet();evaluateNow();drawScope();setRunning(false);drawChart();});
+$('btn-data').addEventListener('click',onChannelChange);
+['chk-md','chk-pts','chk-err'].forEach(id=>$(id).addEventListener('change',drawScope));
+function setTab(t){tab=t;$('tab-learn').setAttribute('aria-selected',t==='learn');$('tab-sweep').setAttribute('aria-selected',t==='sweep');
+  $('chart-title').textContent=t==='learn'?'Evolució de l\'error durant l\'entrenament':'SER vs SNR amb la xarxa actual';
+  $('chart-note').textContent=t==='learn'?'SER mesurada sobre 10 000 mostres de prova noves, independents de les d\'entrenament.':'La xarxa, amb els pesos actuals, s\'avalua a cada SNR amb 8 000 mostres noves. No es torna a entrenar.';
+  if(t==='sweep')runSweep();else drawChart();}
+$('tab-learn').addEventListener('click',()=>setTab('learn'));$('tab-sweep').addEventListener('click',()=>setTab('sweep'));
+const SCEN={
+  awgn:{M:16,snr:12,chan:'awgn',imp:0.6,L:2,H:32,n:4000},
+  pa:{M:16,snr:22,chan:"pa",imp:0.85,L:2,H:32,n:4000},
+  phase:{M:64,snr:26,chan:'phase',imp:0.8,L:2,H:64,n:16000},
+  few:{M:64,snr:24,chan:'awgn',imp:0.6,L:3,H:64,n:250}
+};
+document.querySelectorAll('[data-scen]').forEach(b=>b.addEventListener('click',()=>{
+  const c=SCEN[b.dataset.scen];Object.assign(S,{M:c.M,snr:c.snr,chan:c.chan,imp:c.imp,L:c.L,H:c.H,nTrain:c.n});
+  $('sel-M').value=c.M;$('rng-snr').value=c.snr;$('sel-chan').value=c.chan;$('rng-imp').value=c.imp;$('sel-L').value=c.L;$('sel-H').value=c.H;$('sel-n').value=c.n;
+  buildConst();readTheme();newData();newNet();updateLabels();evaluateNow();drawScope();setRunning(true);
+  if(tab==='sweep')setTab('learn');
+  $('scope').scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'center'});
+}));
+const onTheme=()=>{readTheme();drawScope();drawChart();};
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change',onTheme);
+new MutationObserver(onTheme).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
+new ResizeObserver(()=>{drawScope();drawChart();}).observe($('scope'));
+new ResizeObserver(()=>drawChart()).observe(ch.parentElement);
+if(document.fonts&&document.fonts.ready)document.fonts.ready.then(()=>{drawScope();drawChart();});
+
+
+// ---- Ajuda contextual (tooltips) ----
+const TIPS={
+  scope:'<b>Pla I/Q.</b> Eix horitzontal: component en fase (I). Eix vertical: component en quadratura (Q). El fons de colors mostra quin símbol triaria la xarxa a cada punt del pla. Es recalcula mentre entrena.',
+  M:'<b>Modulació.</b> Nombre de símbols M de la constel·lació. QPSK porta 2 bits per símbol, 16-QAM 4 i 64-QAM 6. Com més símbols, més bits per símbol, però els punts queden més junts i el soroll hi afecta més.',
+  chan:'<b>Canal.</b> Què li passa al senyal entre l\'emissor i el receptor. <b>AWGN</b>: només soroll gaussià. <b>Amplificador no lineal</b>: model de Saleh, comprimeix i gira els símbols exteriors. <b>Soroll de fase</b>: l\'oscil·lador tremola i gira la constel·lació aleatòriament. <b>Desequilibri IQ</b>: les branques I i Q tenen guany i fase diferents i la constel·lació es deforma.',
+  snr:'<b>Es/N0.</b> Relació entre l\'energia mitjana per símbol i la densitat espectral del soroll, en dB. Cada +10 dB vol dir un soroll 10 vegades menys potent. Canviar-la genera mostres noves però no reinicia la xarxa: pots veure com s\'hi adapta.',
+  imp:'<b>Intensitat de la distorsió.</b> Només s\'aplica si el canal no és AWGN pur. 0 % vol dir canal gairebé ideal i 100 % distorsió forta: saturació de l\'amplificador, desviació típica de la fase o grau de desequilibri IQ.',
+  L:'<b>Capes ocultes.</b> Nombre de capes entre l\'entrada (I, Q) i la sortida. Més capes permeten fronteres més complexes, però l\'entrenament és més lent i hi ha més risc de sobreajustament.',
+  H:'<b>Neurones per capa.</b> Amplada de cada capa oculta. Amb poques neurones la xarxa no pot dibuixar prou fronteres, sobretot en 64-QAM. Amb moltes i poques dades, memoritza el soroll.',
+  act:'<b>Activació.</b> Funció no lineal de cada neurona. <b>ReLU</b>, max(0, x), dona fronteres fetes de trams rectes. <b>tanh</b> dona fronteres més suaus i corbes.',
+  lr:'<b>Taxa d\'aprenentatge.</b> Mida del pas amb què l\'optimitzador Adam corregeix els pesos a cada iteració. Si és massa petita, l\'entrenament és lent. Si és massa gran, oscil·la i no s\'estabilitza.',
+  n:'<b>Mostres d\'entrenament.</b> Parelles (punt rebut, símbol enviat) que veu la xarxa, equivalents als pilots d\'un sistema real. Amb poques mostres, la xarxa aprèn el soroll concret i generalitza malament.',
+  arch:'<b>Arquitectura.</b> Mida de cada capa, de l\'entrada a la sortida: 2 entrades (I, Q), les capes ocultes i M sortides, una per símbol. Els paràmetres són tots els pesos i biaixos que s\'ajusten en entrenar.',
+  run:'Inicia o atura l\'entrenament. A cada iteració, la xarxa ajusta els pesos amb un lot de 64 mostres a l\'atzar.',
+  reset:'Torna a posar pesos aleatoris i esborra l\'historial. Útil per veure l\'aprenentatge des de zero.',
+  data:'Genera un conjunt nou de mostres d\'entrenament i de prova amb el mateix canal i la mateixa SNR, sense tocar la xarxa.',
+  chkmd:'Mostra les fronteres fixes del detector clàssic, a mig camí entre nivells veïns.',
+  chkpts:'Mostra fins a 1 500 mostres d\'entrenament, pintades amb el color del símbol que es va enviar de veritat.',
+  chkerr:'Encercla les mostres que la xarxa classifica en un símbol diferent del que es va enviar.',
+  tnn:'<b>SER de la xarxa.</b> Fracció de símbols mal decidits per la xarxa sobre 10 000 mostres de prova que no ha vist mai en entrenar.',
+  tmd:'<b>SER de mínima distància.</b> La mateixa mesura amb el detector clàssic sobre les mateixes mostres de prova. És la referència que cal batre.',
+  tth:'<b>SER teòrica AWGN.</b> Valor analític per a M-QAM quadrada amb només soroll gaussià: Ps = 1 − (1 − 2(1 − 1/√M)·Q(√(3·Es/N0 / (M − 1))))². Si el canal té distorsió, només serveix de referència.',
+  tit:'<b>Iteracions i pèrdua.</b> Iteracions: lots de 64 mostres processats. Pèrdua: entropia creuada mitjana, que mesura com de segura i encertada és la xarxa. Com més baixa, millor.',
+  chart:()=>tab==='learn'
+    ?'<b>Evolució de l\'error.</b> SER en escala logarítmica en funció de les iteracions. La línia blava és la xarxa, la taronja la mínima distància i la grisa la teoria AWGN. Si canvies l\'SNR a mig entrenament, les tres línies salten.'
+    :'<b>SER vs SNR.</b> La xarxa, amb els pesos actuals, s\'avalua de 0 a 30 dB sense tornar-la a entrenar. La línia vertical marca l\'SNR d\'entrenament. Serveix per veure si generalitza a altres nivells de soroll.',
+  tablearn:'SER durant l\'entrenament.',
+  tabsweep:'SER de la xarxa actual avaluada a diferents SNR.'
+};
+const tipEl=document.createElement('div');tipEl.id='tip';tipEl.setAttribute('role','tooltip');document.body.appendChild(tipEl);
+let tipOwner=null;
+function showTip(el){
+  const t=TIPS[el.dataset.tip];if(!t)return;tipEl.innerHTML=typeof t==='function'?t():t;tipOwner=el;
+  if(el.classList.contains('tip-btn'))el.setAttribute('aria-expanded','true');
+  const r=el.getBoundingClientRect();tipEl.style.left='0px';tipEl.style.top='0px';tipEl.classList.add('on');
+  const w=tipEl.offsetWidth,h=tipEl.offsetHeight,vw=document.documentElement.clientWidth;
+  let x=r.left+r.width/2-w/2;x=Math.max(12,Math.min(x,vw-w-12));
+  let y=r.top-h-8;if(y<8)y=r.bottom+8;
+  tipEl.style.left=x+'px';tipEl.style.top=y+'px';
+}
+function hideTip(){tipEl.classList.remove('on');if(tipOwner&&tipOwner.classList.contains('tip-btn'))tipOwner.setAttribute('aria-expanded','false');tipOwner=null;}
+function addTipBtn(parent,key,before){const b=document.createElement('button');b.type='button';b.className='tip-btn';b.textContent='i';b.dataset.tip=key;b.setAttribute('aria-label','Què és això?');b.setAttribute('aria-expanded','false');
+  if(before)parent.insertBefore(b,before);else parent.appendChild(b);return b;}
+[['sel-M','M'],['sel-chan','chan'],['rng-snr','snr'],['rng-imp','imp'],['sel-L','L'],['sel-H','H'],['sel-act','act'],['sel-lr','lr'],['sel-n','n']].forEach(([id,k])=>{
+  const lab=document.querySelector('label[for="'+id+'"]');addTipBtn(lab,k,lab.querySelector('output'));});
+addTipBtn(document.querySelector('.scope-head h2'),'scope');
+addTipBtn($('chart-h'),'chart');
+[['t-nn','tnn'],['t-md','tmd'],['t-th','tth'],['t-it','tit']].forEach(([id,k])=>addTipBtn($(id).parentElement.querySelector('.k'),k));
+[['chk-md','chkmd'],['chk-pts','chkpts'],['chk-err','chkerr']].forEach(([id,k])=>addTipBtn($(id).parentElement,k));
+$('arch').dataset.tip='arch';
+[['btn-run','run'],['btn-reset','reset'],['btn-data','data'],['tab-learn','tablearn'],['tab-sweep','tabsweep']].forEach(([id,k])=>$(id).dataset.tip=k);
+document.querySelectorAll('[data-tip]').forEach(el=>{
+  el.addEventListener('mouseenter',()=>showTip(el));el.addEventListener('mouseleave',hideTip);
+  el.addEventListener('focus',()=>showTip(el));el.addEventListener('blur',hideTip);
+  if(el.classList.contains('tip-btn'))el.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();tipOwner===el?hideTip():showTip(el);});
+});
+document.addEventListener('click',e=>{if(tipOwner&&!e.target.closest('[data-tip]'))hideTip();});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')hideTip();});
+window.addEventListener('scroll',hideTip,{passive:true});
+
+// ---- Inici: pre-entrenament curt perquè la pàgina ja mostri regions ----
+buildConst();readTheme();newData();newNet();updateLabels();
+for(let i=0;i<300;i++)S.loss=net.step(train.X,train.Y,BATCH,S.lr);S.iter=300;
+evaluateNow();drawScope();setRunning(false);
+requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
